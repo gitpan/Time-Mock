@@ -14,6 +14,9 @@ my $builder = $build_class->new(
     'Module::Build' => 0.26,
     'Test::More'    => 0,
   },
+  recommends => {
+    'Date::Parse' => 2.27,
+  },
   add_to_cleanup      => [ qw(Time-Mock-* META.yml)],
   # create_makefile_pl => 'passthrough',
   meta_merge => {
@@ -24,7 +27,7 @@ my $builder = $build_class->new(
         'http://rt.cpan.org/NoAuth/Bugs.html?Dist=Time-Mock',
       #MailingList => 'mailto:...',
       repository =>
-        'http://scratchcomputing.com/svn/Time-Mock/trunk',
+        'http://svn.scratchcomputing.com/Time-Mock/trunk',
     }
   },
 );

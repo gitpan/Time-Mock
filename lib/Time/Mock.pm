@@ -1,5 +1,5 @@
 package Time::Mock;
-$VERSION = v0.0.1;
+$VERSION = v0.0.2;
 
 use warnings;
 use strict;
@@ -75,6 +75,11 @@ BEGIN {
   *CORE::GLOBAL::gmtime    = \&gmtime;
   *CORE::GLOBAL::sleep     = \&sleep;
   *CORE::GLOBAL::alarm     = \&alarm;
+
+  no warnings 'redefine';
+  *Time::HiRes::time = sub () {goto &_hitime};
+  *Time::HiRes::sleep = sub (;@) {goto &sleep};
+  *Time::HiRes::alarm = sub ($;$) {goto &alarm};
 }
 
 sub import {
@@ -90,7 +95,11 @@ sub import {
 =head1 Class Methods
 
 These are the knobs on your time machine, but note that it is probably
-best to adjust them only once: see L<caveats>
+best to adjust them only once: see L<caveats>.  For convenience,
+import() takes will call these methods with each key in its argument
+list.
+
+  perl -MTime::Mock=throttle,600,set,"2009-11-01 00:59" dst_bug.pl
 
 =head2 throttle
 
@@ -104,24 +113,50 @@ Get or set the offset.
 
   Time::Mock->offset(120);
 
+=head2 set
+
+Set the time to a given value.  This may be a numeric time or anything
+parseable by Date::Parse::str2time() (you need to install Date::Parse to
+enable this.)
+
+  Time::Mock->set("2009-11-01 00:59");
+
 =head1 Caveats
 
 This package remembers the actual system time when it was loaded and
-makes adjustments from there.  Future versions might change this
-behavior if I can think of a good reason and scheme for that.
+makes adjustments from there.
+
+Future versions might change this behavior if I can think of a good
+reason and scheme for that.
+
+=head2 forks and threads
 
 The throttle value will hold across forks, but there is no support for
-propagating changes to child processes.  So, set it before you fork!
+propagating changes to child processes.  So, set the knobs only before
+you fork!
+
+Don't ask about threads unless you're asking about me applying your
+patch thanks.
+
+=head2 Networking and System stuff
+
+We're only lying about the clock inside of Perl, not magically messing
+with the universe.
+
+=head2 Time Travel is Dangerous
+
+I suggest that you set the knobs at import() and don't mess with them
+after that unless you're well aware of how your code is using time.
 
 Messing with the throttle during runtime could also give your code the
-illusion of time going backwards.  If the code calls time() before and
-after a slow-down, there could be trouble.
+illusion of time going backwards.  If your code tries to do math with
+the return values of time() before and after a slow-down, there could be
+trouble.
 
 Changing the throttle while an alarm() is set won't change the original
 alarm time.  There would be a similar caveat about sleep() if I hadn't already mentioned forks ;-)
 
-Don't ask about threads unless you're asking about me applying your
-patch thanks.
+Finally, don't ever let your past self see your future self.
 
 =cut
 
@@ -144,6 +179,16 @@ sub offset {
 
 BEGIN { *_realtime = \&Time::Mock::Original::time};
 our $otime = _realtime;
+
+sub set {
+  my $class = shift;
+  my $set = shift(@_) or croak("must have time to set");
+  unless($set =~ m/^\d+$/) {
+    require Date::Parse;
+    $set = Date::Parse::str2time($set);
+  }
+  $offset = $set - $otime;
+}
 
 sub _hitime () {
   return(($otime + $offset) + (_realtime - $otime) * $accel);
